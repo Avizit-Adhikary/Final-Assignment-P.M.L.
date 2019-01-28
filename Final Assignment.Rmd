@@ -1,0 +1,283 @@
+---
+title: "Final Assignment- Practical Machine Learning"
+author: "Avizit Chandra Adhikary"
+date: "January 25, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Loading training and test data sets 
+
+```{r Data loading, eval=TRUE}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+```
+
+Checking for relations between response and probable predictors (detailed codes are skipped):
+
+```{r graphs, eval=TRUE}
+var.name <- names(training)
+var.name <- gsub(var.name, pattern = "roll_belt.1", replacement = "pitch_belt" )
+
+library(ggplot2)
+
+## belt vs classe
+ggplot(training, aes( x=pitch_belt, y=roll_belt, color=classe))+ geom_point()+facet_grid(.~training$new_window) ### Some pattern
+
+## arm vs classe
+ggplot(training, aes( x=yaw_arm, y=roll_arm, color=classe)) + geom_point()+facet_grid(.~training$new_window) ### Some pattern
+
+## Dumbbell vs classe
+ggplot(training, aes( x=yaw_dumbbell, y=roll_dumbbell, color=classe)) + geom_point()+facet_grid(.~training$new_window) ###Some pattern
+
+#### Pattern searching within pitch, roll, yaw, gyros
+ggplot(training, aes( x=pitch_belt, y=pitch_arm, color=classe)) + geom_point()+facet_grid(.~training$new_window) ### No pattern
+
+```
+
+After exploratory data analysis, it got clear that some of the main variables (like roll, pitch, yaw, gyros, accel, magnet for each of arm, forearm, belt, dumbbell) show some patters with classe, while some show no pattern. Also, when new_window="yes", then we get values for some additional variables (mean, min, max, total etc.), but they don't show any observable patters. So, these additional variables have been omitted in further analysis. Correlation among these main variables for each of arm, belt, forearm, dumbbell are checked next (detailed codes are omitted):
+
+```{r correlation, eval= TRUE}
+### correlation checking for belt variables
+
+correlation.matrix <-cor(cbind(training$roll_belt, training$pitch_belt, training$yaw_belt,
+            training$accel_belt_x, training$accel_belt_y, training$accel_belt_z, 
+            training$gyros_belt_x, training$gyros_belt_y, training$gyros_belt_z,
+            training$magnet_belt_x, training$magnet_belt_y, training$magnet_belt_z))
+
+diag(correlation.matrix) <- 0
+correlation.matrix[which(correlation.matrix>0.8, arr.ind = TRUE)]
+
+```
+
+From the correlation matrix, we can see that some variables are correlated more than 80%. To remove the correlation among the variables, Principal Component analysis is conducted on the main variables (gyros, accel, magnet for each of arm, forearm, belt, dumbbell) on the training set and then mapped on the testing set. Prinicipal components are retained till 90% variation explained.
+
+```{r PCA creation, eval=TRUE}
+
+################################### PCA Creation for training and testing set
+
+library(caret)
+
+############## PCA For ARM #############
+pca_gyros_arm <- preProcess( training[,grep("gyros_arm", names(training))], method = "pca", thresh = 0.9)
+pca_gyros_arm$rotation### 2 PCs
+pca_gyros_arm_train <- predict(pca_gyros_arm, training[,grep("gyros_arm", names(training))])
+cor(pca_gyros_arm_train) ### No correlation exists
+pca_gyros_arm_test <- predict(pca_gyros_arm, testing[,grep("gyros_arm", names(testing))])
+
+pca_accel_arm <- preProcess( training[,grep("^accel_arm", names(training))], method = "pca", thresh = 0.9)
+#pca_accel_arm$rotation
+pca_accel_arm_train <- predict(pca_accel_arm, training[,grep("^accel_arm", names(training))])### 3 PCs
+pca_accel_arm_test <- predict(pca_accel_arm, testing[,grep("^accel_arm", names(testing))])
+
+
+pca_magnet_arm <- preProcess( training[,grep("^magnet_arm", names(training))], method = "pca", thresh = 0.9)
+#pca_magnet_arm$rotation
+pca_magnet_arm_train <- predict(pca_magnet_arm, training[,grep("^magnet_arm", names(training))])### 2 PCs
+pca_magnet_arm_test <- predict(pca_magnet_arm, testing[,grep("^magnet_arm", names(testing))])
+
+
+############## PCA For BELT #############
+pca_gyros_belt <- preProcess( training[,grep("gyros_belt", names(training))], method = "pca", thresh = 0.9)
+#pca_gyros_belt$rotation
+pca_gyros_belt_train <- predict(pca_gyros_belt, training[,grep("gyros_belt", names(training))])### 3 PCs
+pca_gyros_belt_test <- predict(pca_gyros_belt, testing[,grep("gyros_belt", names(testing))])
+
+
+pca_accel_belt <- preProcess( training[,grep("^accel_belt", names(training))], method = "pca", thresh = 0.9)
+#pca_accel_belt$rotation
+pca_accel_belt_train <- predict(pca_accel_belt, training[,grep("^accel_belt", names(training))])### 2 PCs
+pca_accel_belt_test <- predict(pca_accel_belt, testing[,grep("^accel_belt", names(testing))])
+
+
+pca_magnet_belt <- preProcess( training[,grep("^magnet_belt", names(training))], method = "pca", thresh = 0.9)
+pca_magnet_belt$rotation
+pca_magnet_belt_train <- predict(pca_magnet_belt, training[,grep("^magnet_belt", names(training))])### 2 PCs
+pca_magnet_belt_test <- predict(pca_magnet_belt, testing[,grep("^magnet_belt", names(testing))])
+
+
+############## PCA For FOREARM #############
+pca_gyros_forearm <- preProcess( training[,grep("gyros_forearm", names(training))], method = "pca", thresh = 0.9)
+pca_gyros_forearm$rotation
+pca_gyros_forearm_train <- predict(pca_gyros_forearm, training[,grep("gyros_forearm", names(training))])
+#cor(pca_gyros_forearm_train) ### 2 PCs
+pca_gyros_forearm_test <- predict(pca_gyros_forearm, testing[,grep("gyros_forearm", names(testing))])
+
+
+pca_accel_forearm <- preProcess( training[,grep("^accel_forearm", names(training))], method = "pca", thresh = 0.9)
+pca_accel_forearm$rotation
+pca_accel_forearm_train <- predict(pca_accel_forearm, training[,grep("^accel_forearm", names(training))])
+#cor(pca_accel_forearm_train) ### 3 PCs
+pca_accel_forearm_test <- predict(pca_accel_forearm, testing[,grep("^accel_forearm", names(testing))])
+
+
+pca_magnet_forearm <- preProcess( training[,grep("^magnet_forearm", names(training))], method = "pca", thresh = 0.9)
+pca_magnet_forearm$rotation
+pca_magnet_forearm_train <- predict(pca_magnet_forearm, training[,grep("^magnet_forearm", names(training))])
+#cor(pca_magnet_forearm_train) ### 3 PCs
+pca_magnet_forearm_test <- predict(pca_magnet_forearm, testing[,grep("^magnet_forearm", names(testing))])
+
+
+
+############## PCA For Dumbbel #############
+pca_gyros_dumbbell <- preProcess( training[,grep("gyros_dumbbell", names(training))], method = "pca", thresh = 0.9)
+pca_gyros_dumbbell$rotation
+pca_gyros_dumbbell_train <- predict(pca_gyros_dumbbell, training[,grep("gyros_dumbbell",names(training))])
+pca_gyros_dumbbell_test <- predict(pca_gyros_dumbbell, testing[,grep("gyros_dumbbell", names(testing))])
+
+
+pca_accel_dumbbell <- preProcess( training[,grep("^accel_dumbbell", names(training))], method = "pca", thresh = 0.9)
+pca_accel_dumbbell$rotation
+pca_accel_dumbbell_train <- predict(pca_accel_dumbbell, training[,grep("^accel_dumbbell", names(training))])
+pca_accel_dumbbell_test <- predict(pca_accel_dumbbell, testing[,grep("^accel_dumbbell", names(testing))])
+
+
+pca_magnet_dumbbell <- preProcess( training[,grep("^magnet_dumbbell",names(training))], method = "pca", thresh = 0.9)
+pca_magnet_dumbbell_train <- predict(pca_magnet_dumbbell, training[,grep("^magnet_dumbbell", names(training))])
+pca_magnet_dumbbell_test <- predict(pca_magnet_dumbbell, testing[,grep("^magnet_dumbbell", names(testing))])
+
+
+
+```
+
+
+After PCAs are created for both training and testing set, we create "build.data" containing main variables and PCAs. We fit Random forest and Boosting models on the "build.data" data where, "classe" is the response-class variable and all other main variables including PCAs are explanatory variables.
+
+
+```{r Model fitting, eval=TRUE}
+
+
+###################### Model Fitting ###################
+
+pitch.index <- grep("^pitch", var.name)
+roll.index <-  grep("^roll", var.name)
+yaw.index <-  grep("^yaw", var.name)
+
+
+####### Training Test
+
+training$pca_gyros_arm.PC1 <- pca_gyros_arm_train$PC1
+training$pca_gyros_arm.PC2 <- pca_gyros_arm_train$PC2
+
+training$pca_accel_arm.PC1 <- pca_accel_arm_train$PC1
+training$pca_accel_arm.PC2 <- pca_accel_arm_train$PC2
+training$pca_accel_arm.PC3 <- pca_accel_arm_train$PC3
+
+training$pca_magnet_arm.PC1 <- pca_magnet_arm_train$PC1
+training$pca_magnet_arm.PC2 <- pca_magnet_arm_train$PC2
+
+training$pca_gyros_belt.PC1 <- pca_gyros_belt_train$PC1
+training$pca_gyros_belt.PC2 <- pca_gyros_belt_train$PC2
+training$pca_gyros_belt.PC3 <- pca_gyros_belt_train$PC3
+
+training$pca_accel_belt.PC1 <- pca_accel_belt_train$PC1
+training$pca_accel_belt.PC2 <- pca_accel_belt_train$PC2
+
+training$pca_magnet_belt.PC1 <- pca_magnet_belt_train$PC1
+training$pca_magnet_belt.PC2 <- pca_magnet_belt_train$PC2
+
+training$pca_gyros_forearm.PC1 <- pca_gyros_forearm_train$PC1
+training$pca_gyros_forearm.PC2 <- pca_gyros_forearm_train$PC2
+
+training$pca_accel_forearm.PC1 <- pca_accel_forearm_train$PC1
+training$pca_accel_forearm.PC2 <- pca_accel_forearm_train$PC2
+training$pca_accel_forearm.PC3 <- pca_accel_forearm_train$PC3
+
+training$pca_magnet_forearm.PC1 <- pca_magnet_forearm_train$PC1
+training$pca_magnet_forearm.PC2 <- pca_magnet_forearm_train$PC2
+training$pca_magnet_forearm.PC3 <- pca_magnet_forearm_train$PC3
+
+training$pca_gyros_dumbbell.PC1 <- pca_gyros_dumbbell_train$PC1
+training$pca_gyros_dumbbell.PC2 <- pca_gyros_dumbbell_train$PC2
+
+training$pca_accel_dumbbell.PC1 <- pca_accel_dumbbell_train$PC1
+training$pca_accel_dumbbell.PC2 <- pca_accel_dumbbell_train$PC2
+
+training$pca_magnet_dumbbell.PC1 <- pca_magnet_dumbbell_train$PC1
+training$pca_magnet_dumbbell.PC2 <- pca_magnet_dumbbell_train$PC2
+
+
+###### PCA for Testing Set
+
+testing$pca_gyros_arm.PC1 <- pca_gyros_arm_test$PC1
+testing$pca_gyros_arm.PC2 <- pca_gyros_arm_test$PC2
+
+testing$pca_accel_arm.PC1 <- pca_accel_arm_test$PC1
+testing$pca_accel_arm.PC2 <- pca_accel_arm_test$PC2
+testing$pca_accel_arm.PC3 <- pca_accel_arm_test$PC3
+
+testing$pca_magnet_arm.PC1 <- pca_magnet_arm_test$PC1
+testing$pca_magnet_arm.PC2 <- pca_magnet_arm_test$PC2
+
+testing$pca_gyros_belt.PC1 <- pca_gyros_belt_test$PC1
+testing$pca_gyros_belt.PC2 <- pca_gyros_belt_test$PC2
+testing$pca_gyros_belt.PC3 <- pca_gyros_belt_test$PC3
+
+testing$pca_accel_belt.PC1 <- pca_accel_belt_test$PC1
+testing$pca_accel_belt.PC2 <- pca_accel_belt_test$PC2
+
+testing$pca_magnet_belt.PC1 <- pca_magnet_belt_test$PC1
+testing$pca_magnet_belt.PC2 <- pca_magnet_belt_test$PC2
+
+testing$pca_gyros_forearm.PC1 <- pca_gyros_forearm_test$PC1
+testing$pca_gyros_forearm.PC2 <- pca_gyros_forearm_test$PC2
+
+testing$pca_accel_forearm.PC1 <- pca_accel_forearm_test$PC1
+testing$pca_accel_forearm.PC2 <- pca_accel_forearm_test$PC2
+testing$pca_accel_forearm.PC3 <- pca_accel_forearm_test$PC3
+
+testing$pca_magnet_forearm.PC1 <- pca_magnet_forearm_test$PC1
+testing$pca_magnet_forearm.PC2 <- pca_magnet_forearm_test$PC2
+testing$pca_magnet_forearm.PC3 <- pca_magnet_forearm_test$PC3
+
+testing$pca_gyros_dumbbell.PC1 <- pca_gyros_dumbbell_test$PC1
+testing$pca_gyros_dumbbell.PC2 <- pca_gyros_dumbbell_test$PC2
+
+testing$pca_accel_dumbbell.PC1 <- pca_accel_dumbbell_test$PC1
+testing$pca_accel_dumbbell.PC2 <- pca_accel_dumbbell_test$PC2
+
+testing$pca_magnet_dumbbell.PC1 <- pca_magnet_dumbbell_test$PC1
+testing$pca_magnet_dumbbell.PC2 <- pca_magnet_dumbbell_test$PC2
+
+
+pca.index <- grep("^pca", names(training))
+build.data <- training[,c(160, pitch.index, roll.index, yaw.index, pca.index)]
+
+library(randomForest)
+library(caret)
+
+### Training Random Forest Model
+model.rf <- randomForest(classe~., data=build.data)
+model.rf
+
+### Training Boosting Model
+fitControl <- trainControl(method="repeatedcv",
+                           number=5,
+                           repeats=1,
+                           verboseIter=FALSE)
+
+gbmFit <- train(classe ~ ., data=build.data,
+                method="gbm",
+                trControl=fitControl,
+                verbose=FALSE)
+summary(gbmFit)
+confusionMatrix(predict(gbmFit, build.data), build.data$classe)
+
+```
+
+We see that, both Random Forest and Boosting Models fit the training data well. After fitting the models, we checked how similarly both models predict "classe" on the testing data.
+
+```{r Predicting, eval=TRUE}
+
+pred.test.rf <- predict(model.rf, testing)
+pred.test.boost <- predict(gbmFit, testing)
+table(pred.test.rf, pred.test.boost)
+cbind(pred.test.rf, pred.test.boost)
+```
+
+We can see that, both models almost give the same prediction on the testing data set. From Accuracy comparison, we choose Boosting as our final model.
